@@ -57,7 +57,27 @@ func run() error {
 // the signature with one of these keys verifies that the request to the
 // completions API comes from GitHub and not elsewhere on the internet.
 func fetchPublicKey() (*ecdsa.PublicKey, error) {
-	resp, err := http.Get("https://api.github.com/meta/public_keys/copilot_api")
+	
+	// URL dell'API di GitHub
+	url := "https://api.github.com/meta/public_keys/copilot_api"
+
+	// Crea la richiesta
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Aggiungi l'intestazione User-Agent
+	req.Header.Set("User-Agent", "rag-extension-poc/1.0")
+
+	token := os.Getenv("GITHUB_TOKEN") // Assicurati di configurare questa variabile
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	// Invia la richiesta
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch public key: %w", err)
 	}

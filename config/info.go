@@ -32,21 +32,25 @@ func New() (*Info, error) {
 	if port == "" {
 		return nil, fmt.Errorf("%s environment variable required", portEnv)
 	}
+	fmt.Println("PORT:", port)
 
 	fqdn := os.Getenv(fqdnEnv)
 	if fqdn == "" {
 		return nil, fmt.Errorf("%s environment variable required", fqdnEnv)
 	}
+	fmt.Println("FQDN:", fqdn)
 
 	clientID := os.Getenv(clientIdEnv)
 	if clientID == "" {
 		return nil, fmt.Errorf("%s environment variable required", clientIdEnv)
 	}
+	fmt.Println("CLIENT_ID:", clientID)
 
 	clientSecret := os.Getenv(clientSecretEnv)
 	if clientSecret == "" {
 		return nil, fmt.Errorf("%s environment variable required", clientSecretEnv)
 	}
+	fmt.Println("CLIENT_SECRET:", clientSecret)
 
 	return &Info{
 		Port:         port,
