@@ -9,14 +9,25 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"io"
 	"strings"
+	"log"
+	"path/filepath"
+	"archive/zip"
+	"bytes"
 
 	"github.com/copilot-extensions/rag-extension/agent"
 	"github.com/copilot-extensions/rag-extension/config"
 	"github.com/copilot-extensions/rag-extension/oauth"
+
 )
 
 func main() {
+	
+	if err := convertDocx(); err != nil {
+		log.Fatalf("Errore durante la conversione: %v", err)
+	}
+
 	if err := run(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -128,4 +139,125 @@ func fetchPublicKey() (*ecdsa.PublicKey, error) {
 	}
 
 	return ecdsaKey, nil
+}
+
+// convertDocx legge i file .docx, estrae il contenuto testuale e lo salva in .md
+func convertDocx() error {
+	inputDir := "./documents"
+	outputDir := "./data"
+	processedDir := filepath.Join(inputDir, "processed")
+
+	// Crea cartelle necessarie
+	if err := os.MkdirAll(outputDir, os.ModePerm); err != nil {
+		return fmt.Errorf("impossibile creare la cartella di output: %w", err)
+	}
+	if err := os.MkdirAll(processedDir, os.ModePerm); err != nil {
+		return fmt.Errorf("impossibile creare la cartella processed: %w", err)
+	}
+
+	// Leggi i file nella cartella input
+	files, err := os.ReadDir(inputDir)
+	if err != nil {
+		return fmt.Errorf("impossibile leggere la cartella %s: %w", inputDir, err)
+	}
+
+	for _, file := range files {
+		// Processa solo file con estensione .docx
+		if filepath.Ext(file.Name()) != ".docx" {
+			continue
+		}
+
+		inputFilePath := filepath.Join(inputDir, file.Name())
+		fmt.Printf("Elaborazione del file: %s\n", inputFilePath)
+
+		// Estrai il contenuto testuale dal file .docx
+		text, err := extractTextFromDocx(inputFilePath)
+		if err != nil {
+			log.Printf("Errore nell'elaborazione del file %s: %v", inputFilePath, err)
+			continue
+		}
+
+		// Scrivi il testo estratto in un file .md
+		outputFileName := strings.TrimSuffix(file.Name(), ".docx") + ".md"
+		outputFilePath := filepath.Join(outputDir, outputFileName)
+		err = os.WriteFile(outputFilePath, []byte(text), 0644)
+		if err != nil {
+			log.Printf("Errore nella scrittura del file %s: %v", outputFilePath, err)
+			continue
+		}
+
+		// Sposta il file originale nella cartella processed
+		processedFilePath := filepath.Join(processedDir, file.Name())
+		err = os.Rename(inputFilePath, processedFilePath)
+		if err != nil {
+			log.Printf("Errore nello spostamento del file %s nella cartella processed: %v", inputFilePath, err)
+			continue
+		}
+
+		fmt.Printf("File convertito e salvato: %s\n", outputFilePath)
+	}
+
+	return nil
+}
+
+// extractTextFromDocx estrae il contenuto testuale da un file .docx
+func extractTextFromDocx(filePath string) (string, error) {
+	// Apri il file .docx come archivio ZIP
+	reader, err := zip.OpenReader(filePath)
+	if err != nil {
+		return "", fmt.Errorf("impossibile aprire il file .docx: %w", err)
+	}
+	defer reader.Close()
+
+	var documentXML *zip.File
+	for _, file := range reader.File {
+		if file.Name == "word/document.xml" {
+			documentXML = file
+			break
+		}
+	}
+
+	if documentXML == nil {
+		return "", fmt.Errorf("document.xml non trovato nel file .docx")
+	}
+
+	// Leggi il contenuto di document.xml
+	rc, err := documentXML.Open()
+	if err != nil {
+		return "", fmt.Errorf("impossibile aprire document.xml: %w", err)
+	}
+	defer rc.Close()
+
+	// Estrai il testo eliminando i tag XML
+	var buffer bytes.Buffer
+	_, err = io.Copy(&buffer, rc)
+	if err != nil {
+		return "", fmt.Errorf("impossibile leggere document.xml: %w", err)
+	}
+
+	// Rimuovi i tag XML
+	text := stripXMLTags(buffer.String())
+	return text, nil
+}
+
+// stripXMLTags rimuove i tag XML da una stringa
+func stripXMLTags(input string) string {
+	var output strings.Builder
+	inTag := false
+
+	for _, char := range input {
+		if char == '<' {
+			inTag = true
+			continue
+		}
+		if char == '>' {
+			inTag = false
+			continue
+		}
+		if !inTag {
+			output.WriteRune(char)
+		}
+	}
+
+	return strings.TrimSpace(output.String())
 }
