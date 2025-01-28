@@ -156,7 +156,7 @@ func (s *Service) generateCompletion(ctx context.Context, integrationID, apiToke
 	messages = append(messages, req.Messages...)
 
 	chatReq := &copilot.ChatCompletionsRequest{
-		Model:    copilot.ModelGPT35,
+		Model:    copilot.ModelGPT4,
 		Messages: messages,
 		Stream:   true,
 	}
